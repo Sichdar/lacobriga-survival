@@ -4,3 +4,6 @@ This repository is published so that the game can be played in a web browser.
 No licence is granted to copy, modify, distribute or reuse the code, text or
 other content, in whole or in part, without written permission from the
 copyright holder.
+
+Exception: vendor/three.module.min.js is three.js, (c) three.js authors, under
+the MIT licence in vendor/three-LICENSE.txt.

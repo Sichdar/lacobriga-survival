@@ -39,6 +39,7 @@ window.I18N = {
     skip: 'Skip', overTitle: 'Lacobriga is empty', overYears: 'The town lasted {y} year(s).', overMost: 'Most people at once: {n}',
     overLast: 'Last chronicle', again: 'New town', toTitle: 'Title',
     resume: 'Resume', save: 'Save now', saved: 'Saved', quitTitle: 'Save and go to title', language: 'Language',
+    view: 'View', view3d: '3D', viewTop: 'Top view', no3d: '3D could not start on this device; showing the top view.', loading3d: 'Loading 3D…',
     tutorialOff: 'Hide the Elder', adults: 'Adults', children: 'Children', elders: 'Elders', idle: 'Without job',
     jobs: 'Jobs', chronicle: 'Chronicle', homes: 'Homes', perMonth: 'Per month', need: 'Needs',
     speedLbl: ['⏸', '▶ 1×', '▶▶ 2×', '▶▶▶ 3×'], close: 'Close', difficulty: 'Difficulty'
@@ -82,6 +83,7 @@ window.I18N = {
     skip: 'Saltar', overTitle: 'Lacóbriga ficou vazia', overYears: 'A vila durou {y} ano(s).', overMost: 'Máximo de pessoas: {n}',
     overLast: 'Última crónica', again: 'Nova vila', toTitle: 'Início',
     resume: 'Continuar', save: 'Gravar agora', saved: 'Gravado', quitTitle: 'Gravar e ir ao início', language: 'Língua',
+    view: 'Vista', view3d: '3D', viewTop: 'Vista de cima', no3d: 'O 3D não arrancou neste aparelho; a mostrar a vista de cima.', loading3d: 'A carregar o 3D…',
     tutorialOff: 'Esconder a Anciã', adults: 'Adultos', children: 'Crianças', elders: 'Idosos', idle: 'Sem trabalho',
     jobs: 'Trabalhos', chronicle: 'Crónica', homes: 'Casas', perMonth: 'Por mês', need: 'Gasto',
     speedLbl: ['⏸', '▶ 1×', '▶▶ 2×', '▶▶▶ 3×'], close: 'Fechar', difficulty: 'Dificuldade'

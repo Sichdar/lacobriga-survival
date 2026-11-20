@@ -41,7 +41,7 @@ const NAMES_M = ['Ambatus','Camalus','Boutius','Tancinus','Caturo','Reburrus','A
 const NAMES_F = ['Camira','Boutia','Ambata','Tancina','Reburra','Caturia','Arcia','Celtia','Medama','Pintama','Apana','Toncia','Allucia','Cloutina','Ladronia','Maelia','Talava','Visalia','Amoena','Clouta','Sunta','Aebura','Cusia','Lubaena'];
 
 // ---------- settings & text ----------
-let settings = { lang: (navigator.language || 'pt').startsWith('pt') ? 'pt' : 'en', tutorial: true, diff: 'gentle' };
+let settings = { lang: (navigator.language || 'pt').startsWith('pt') ? 'pt' : 'en', tutorial: true, diff: 'gentle', view: '3d' };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) {}
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) {} }
 function t(key, p) {
@@ -472,6 +472,7 @@ const terrainCanvas = document.createElement('canvas');
 terrainCanvas.width = W * TS; terrainCanvas.height = H * TS;
 const tctx = terrainCanvas.getContext('2d');
 let terrainDirty = true;
+let V3 = null, use3D = false, loading3D = false; // 3D view (view3d.js), loaded on demand
 
 const PAL = {
   grass:  ['#8DB255', '#C9BC74', '#A9AE62', '#7FA84E'],
@@ -486,7 +487,55 @@ function resize() {
   dpr = Math.min(2, window.devicePixelRatio || 1);
   viewW = innerWidth; viewH = innerHeight;
   cv.width = Math.round(viewW * dpr); cv.height = Math.round(viewH * dpr);
+  if (V3) V3.resize(viewW, viewH, dpr);
   clampCamera();
+}
+
+// ---------- 3D view switch ----------
+// What the 3D view may read. It never changes the game state.
+const G = {
+  W, H, T, DEFS, PAL, MONTH_HARVEST, camera, terrainCanvas, seasonOf, hash,
+  get S() { return S; }, get tiles() { return tiles; }, get trees() { return trees; },
+  get placing() { return placing; }, get selected() { return selected; },
+  canPlace: (type, x, y) => canPlace(type, x, y),
+};
+function setView(v) {
+  settings.view = v; saveSettings();
+  if (v === '3d' && !V3) { load3D(); return; }
+  use3D = v === '3d' && !!V3;
+  terrainDirty = true;
+  clampCamera(); followGhost();
+  updateViewUI();
+}
+function load3D() {
+  if (loading3D) return;
+  loading3D = true;
+  if (S) toast(t('loading3d'));
+  import('./vendor/three.module.min.js')
+    .then(THREE => {
+      V3 = window.createView3D(THREE, G);
+      V3.resize(viewW, viewH, dpr);
+      loading3D = false;
+      if (settings.view === '3d') setView('3d');
+    })
+    .catch(err => {
+      console.warn('3D view unavailable:', err);
+      loading3D = false; V3 = null; use3D = false;
+      settings.view = 'top'; saveSettings(); updateViewUI();
+      if (S) toast(t('no3d'));
+    });
+}
+function updateViewUI() {
+  $('btnView').textContent = use3D ? '2D' : '3D';
+  $('btnView').setAttribute('aria-label', t('view') + ': ' + (use3D ? t('viewTop') : t('view3d')));
+  $('btnRotL').hidden = $('btnRotR').hidden = !use3D;
+}
+function panBy(dx, dy) { // drag by screen pixels
+  if (use3D) {
+    const c = Math.cos(V3.yaw), s = Math.sin(V3.yaw), z = camera.zoom, zv = camera.zoom * Math.sin(V3.PITCH);
+    camera.x -= (c * dx) / z + (s * dy) / zv;
+    camera.y -= (-s * dx) / z + (c * dy) / zv;
+  } else { camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; }
 }
 
 function hash(x, y) { let h = x * 374761393 + y * 668265263; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
@@ -519,30 +568,39 @@ function drawTerrain() {
     if (tt === T.SEA || tt === T.RIVER) { tctx.strokeStyle = 'rgba(255,255,255,.18)'; tctx.lineWidth = 1.5; tctx.beginPath(); tctx.moveTo(px + 4 + h * 8, py + 10 + h * 12); tctx.lineTo(px + 14 + h * 8, py + 10 + h * 12); tctx.stroke(); }
     if (tt === T.MARSH) { tctx.strokeStyle = 'rgba(40,70,40,.5)'; tctx.lineWidth = 1.5; for (let k = 0; k < 3; k++) { const ax = px + 6 + k * 9; tctx.beginPath(); tctx.moveTo(ax, py + 24); tctx.lineTo(ax + 2, py + 10); tctx.stroke(); } }
   }
-  // trees on top
+  // trees on top (the 3D view draws its own trees)
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (!trees[idx(x, y)]) continue;
+    if (use3D || !trees[idx(x, y)]) continue;
     const h = hash(x, y), px = x * TS + 16 + (h - 0.5) * 8, py = y * TS + 16 + (hash(y, x) - 0.5) * 8, r = 11 + h * 4;
     tctx.fillStyle = 'rgba(0,0,0,.18)'; tctx.beginPath(); tctx.arc(px + 3, py + 4, r, 0, 7); tctx.fill();
     tctx.fillStyle = se === 1 ? '#4D6E35' : '#3F6B3A'; tctx.beginPath(); tctx.arc(px, py, r, 0, 7); tctx.fill();
     tctx.fillStyle = 'rgba(160,200,110,.35)'; tctx.beginPath(); tctx.arc(px - 3, py - 4, r * 0.55, 0, 7); tctx.fill();
   }
   terrainDirty = false;
+  if (use3D) V3.terrainChanged();
 }
 
 function toScreen(x, y) { return [(x - camera.x) * camera.zoom + viewW / 2, (y - camera.y) * camera.zoom + viewH / 2]; }
 function toTile(sx, sy) { return [(sx - viewW / 2) / camera.zoom + camera.x, (sy - viewH / 2) / camera.zoom + camera.y]; }
 function clampCamera() {
   camera.zoom = Math.max(viewW / 32, Math.min(viewW / 3, camera.zoom));
+  if (use3D) { camera.x = Math.max(1, Math.min(W - 1, camera.x)); camera.y = Math.max(1, Math.min(H - 1, camera.y)); return; }
   const hw = viewW / 2 / camera.zoom, hh = viewH / 2 / camera.zoom;
   camera.x = hw * 2 >= W ? W / 2 : Math.max(hw, Math.min(W - hw, camera.x));
   camera.y = hh * 2 >= H ? H / 2 : Math.max(hh - 3, Math.min(H - hh + 3, camera.y));
 }
 
 function render() {
+  if (V3) V3.setVisible(!!S && use3D);
   if (!S) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#2F8C9A'; ctx.fillRect(0, 0, cv.width, cv.height); return; }
   if (terrainDirty) drawTerrain();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (use3D) { // 3D scene on its own canvas below; this canvas only carries the badges
+    V3.render();
+    ctx.clearRect(0, 0, viewW, viewH);
+    drawBadges((x, y) => V3.project(x, y, 1.45));
+    return;
+  }
   ctx.fillStyle = PAL.sea; ctx.fillRect(0, 0, viewW, viewH);
   const z = camera.zoom;
   const [ox, oy] = toScreen(0, 0);
@@ -567,14 +625,20 @@ function render() {
     ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.fill();
     ctx.strokeStyle = '#2b2118'; ctx.lineWidth = 1; ctx.stroke();
   }
-  // need icons over houses
+  drawBadges((x, y, d) => toScreen(x, y - d.h / 2));
+}
+
+// need icons over buildings; where(x, y, def) gives the screen point above a building's centre
+function drawBadges(where) {
   const sh = S.lastShort || {};
   const needIco = (sh.water > 0 ? '💧' : '') + (sh.food > 0 ? '🍞' : '') + (sh.fire > 0 ? '🔥' : '');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `${Math.max(14, Math.min(22, z * 0.5))}px system-ui`;
+  ctx.font = `${Math.max(14, Math.min(22, camera.zoom * 0.5))}px system-ui`;
   for (const b of S.buildings) {
     if (!b.done) continue;
-    const d = DEFS[b.type]; const [sx, sy] = toScreen(b.x + d.w / 2, b.y);
+    const d = DEFS[b.type]; const pt = where(b.x + d.w / 2, b.y + d.h / 2, d);
+    if (!pt) continue;
+    const [sx, sy] = pt;
     let ico = '';
     if (b.type === 'house') { if (!S.families.some(f => f.home === b.id)) ico = '∅'; else ico = needIco; }
     else if (d.max > 0 && b.workers.length === 0) ico = '👤?';
@@ -695,7 +759,7 @@ cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
   if (pointers.size === 1) gesture = { type: 'tap', moved: 0 };
-  else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; gesture = { type: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), z0: camera.zoom }; }
+  else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; gesture = { type: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), z0: camera.zoom, a0: Math.atan2(b.y - a.y, b.x - a.x) }; }
 });
 cv.addEventListener('pointermove', e => {
   const p = pointers.get(e.pointerId); if (!p || !S) return;
@@ -705,12 +769,17 @@ cv.addEventListener('pointermove', e => {
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     camera.zoom = gesture.z0 * d / gesture.d0;
-    camera.x -= dx / 2 / camera.zoom; camera.y -= dy / 2 / camera.zoom;
+    if (use3D) { // two-finger twist turns the 3D view
+      const a1 = Math.atan2(b.y - a.y, b.x - a.x);
+      let da = a1 - gesture.a0; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
+      gesture.a0 = a1; V3.twist(da);
+    }
+    panBy(dx / 2, dy / 2);
     clampCamera(); followGhost();
   } else if (gesture) {
     gesture.moved += Math.abs(dx) + Math.abs(dy);
     if (gesture.moved > 8) gesture.type = 'pan';
-    if (gesture.type === 'pan') { camera.x -= dx / camera.zoom; camera.y -= dy / camera.zoom; clampCamera(); followGhost(); }
+    if (gesture.type === 'pan') { panBy(dx, dy); clampCamera(); followGhost(); }
   }
 });
 const endPointer = e => {
@@ -728,18 +797,25 @@ window.addEventListener('keydown', e => {
   if (k === ' ') { setSpeed(speed === 0 ? 1 : 0); e.preventDefault(); }
   if (k >= '1' && k <= '3') setSpeed(+k);
   if (k === 'escape') { if (placing) cancelPlace(); else closeSheet(); }
-  const pan = 2;
-  if (k === 'arrowleft' || k === 'a') camera.x -= pan; if (k === 'arrowright' || k === 'd') camera.x += pan;
-  if (k === 'arrowup' || k === 'w') camera.y -= pan; if (k === 'arrowdown' || k === 's') camera.y += pan;
+  if (use3D && k === 'q') V3.rotate(-1); if (use3D && k === 'e') V3.rotate(1);
+  const pan = 2 * camera.zoom; // in screen pixels, so it follows the 3D view's turn
+  if (k === 'arrowleft' || k === 'a') panBy(pan, 0); if (k === 'arrowright' || k === 'd') panBy(-pan, 0);
+  if (k === 'arrowup' || k === 'w') panBy(0, pan); if (k === 'arrowdown' || k === 's') panBy(0, -pan);
   clampCamera(); followGhost();
 });
 
 function onTap(sx, sy) {
   if (!S) return;
-  const [tx, ty] = toTile(sx, sy).map(Math.floor);
+  let tx, ty, hitId = -1;
+  if (use3D) {
+    const hit = V3.pick(sx, sy);
+    if (!hit) { if (!placing) { selected = null; closeSheet(); } return; }
+    tx = Math.floor(hit.x); ty = Math.floor(hit.y);
+    if (hit.bid !== undefined) hitId = hit.bid;
+  } else [tx, ty] = toTile(sx, sy).map(Math.floor);
   if (placing) { camera.x = tx + DEFS[placing.type].w / 2; camera.y = ty + DEFS[placing.type].h / 2; clampCamera(); followGhost(); return; }
   if (!inMap(tx, ty)) return;
-  const id = occ[idx(tx, ty)];
+  const id = hitId >= 0 ? hitId : occ[idx(tx, ty)];
   if (id >= 0) { selected = buildingById(id); openBuilding(selected); }
   else { selected = null; closeSheet(); }
 }
@@ -920,15 +996,20 @@ function openMenu() {
   openSheet(sheetHead('☰ ' + t('menu')) +
     `<button class="big" data-close onclick="this.dispatchEvent(new CustomEvent('resume',{bubbles:true}))">${t('resume')}</button>
      <button class="big alt" id="mSave">${t('save')}</button>
+     <button class="big alt" id="mView">${t('view')}: ${settings.view === '3d' ? t('view3d') : t('viewTop')}</button>
      <button class="big alt" id="mLang">${t('language')}: ${settings.lang === 'pt' ? 'Português' : 'English'}</button>
      <button class="big alt" id="mTut">${t('tutorialOff')}</button>
      <button class="big alt" id="mTitle">${t('quitTitle')}</button>`);
   $('mSave').onclick = () => { saveGame(); toast(t('saved')); };
+  $('mView').onclick = () => { setView(settings.view === '3d' ? 'top' : '3d'); openMenu(); };
   $('mLang').onclick = () => { settings.lang = settings.lang === 'pt' ? 'en' : 'pt'; saveSettings(); applyStaticText(); setSpeed(0); openMenu(); showElder(); };
   $('mTut').onclick = () => { S.tut = 99; showElder(); closeSheet(); };
   $('mTitle').onclick = () => { saveGame(); closeSheet(); showTitle(); };
 }
 
+$('btnView').onclick = () => setView(use3D ? 'top' : '3d');
+$('btnRotL').onclick = () => { if (V3) V3.rotate(-1); };
+$('btnRotR').onclick = () => { if (V3) V3.rotate(1); };
 $('btnBuild').onclick = () => openBuildMenu();
 $('btnTown').onclick = () => openTown();
 $('btnMenu').onclick = () => openMenu();
@@ -987,12 +1068,14 @@ window.addEventListener('resize', resize);
 resize();
 applyStaticText();
 setSpeed(1);
+updateViewUI();
+if (settings.view === '3d') load3D();
 showTitle();
 requestAnimationFrame(frame);
 
 // for testing from the browser console
 window.__lacobriga = {
-  get S() { return S; }, monthTick: () => monthTick(), dayTick: () => dayTick(), newGame, setSpeed, canPlace, DEFS,
+  get S() { return S; }, get V3() { return V3; }, camera, setView, monthTick: () => monthTick(), dayTick: () => dayTick(), newGame, setSpeed, canPlace, DEFS,
   build(type, x, y) { const d = DEFS[type]; if (canPlace(type, x, y)) return null; S.stock.logs -= d.logs; S.stock.stone -= d.stone; return addBuilding(type, x, y, true); },
   staff(b, n) { for (const p of S.people) { if (b.workers.length >= Math.min(n, DEFS[b.type].max)) break; if (isAdult(p) && p.job < 0) { p.job = b.id; b.workers.push(p.id); } } },
   find(type) { let best = null, bd = 1e9; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!canPlace(type, x, y)) { const d = Math.hypot(x - 16, y - 21); if (d < bd) { bd = d; best = [x, y]; } } return best; },
