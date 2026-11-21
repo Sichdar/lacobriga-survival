@@ -671,7 +671,7 @@ window.createView3D = function (THREE, G) {
   }
   function syncGhost() {
     const p = G.placing;
-    if (!p) { if (ghost) { scene.remove(ghost); disposeGroup(ghost); ghost = null; ghostType = null; } return; }
+    if (!p) { if (ghost) { scene.remove(ghost); disposeGroup(ghost); ghost = null; ghostType = null; } syncGrid(null); return; }
     const d = DEFS[p.type];
     if (ghostType !== p.type) {
       if (ghost) { scene.remove(ghost); disposeGroup(ghost); }
@@ -683,6 +683,45 @@ window.createView3D = function (THREE, G) {
     const bad = !!G.canPlace(p.type, p.x, p.y);
     ghostPlate.userData.setColor(bad ? '#D4483B' : '#4f8a3a', bad ? 0.38 : 0.3);
     ghost.position.set(p.x + d.w / 2, footprintTop(p.x, p.y, d.w, d.h), p.y + d.h / 2);
+    syncGrid(p, d, bad);
+  }
+
+  // placement grid: tile lines draped over the ground around the ghost, fading out in a circle (placing only)
+  const GRID_R = 4.5, GRID_SEG = 4;
+  const gridU = { uC: { value: new THREE.Vector2() }, uR: { value: new THREE.Vector2(1, 5) }, uW: { value: 1.5 }, uCol: { value: new THREE.Color('#fff6e0') } };
+  const gridMat = new THREE.ShaderMaterial({
+    uniforms: gridU, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    vertexShader: `varying vec2 vW;
+      void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+    fragmentShader: `uniform vec2 uC; uniform vec2 uR; uniform float uW; uniform vec3 uCol; varying vec2 vW;
+      void main() {
+        vec2 g = abs(fract(vW - 0.5) - 0.5) / fwidth(vW);          // distance to the nearest tile edge, in pixels
+        float line = 1.0 - smoothstep(uW * 0.5, uW * 0.5 + 1.0, min(g.x, g.y));
+        float fade = 1.0 - smoothstep(uR.x, uR.y, distance(vW, uC));
+        float a = line * fade * 0.5;
+        if (a < 0.01) discard;
+        gl_FragColor = vec4(uCol, a);
+      }`
+  });
+  let grid = null, gridKey = '';
+  function syncGrid(p, d, bad) {
+    if (!p) { if (grid) { scene.remove(grid); grid.geometry.dispose(); grid = null; gridKey = ''; } return; }
+    const key = p.type + ',' + p.x + ',' + p.y;
+    if (key !== gridKey) {
+      gridKey = key;
+      const cx = p.x + d.w / 2, cz = p.y + d.h / 2, half = Math.max(d.w, d.h) / 2 + GRID_R + 0.5, n = Math.ceil(half * 2 * GRID_SEG);
+      const geo = new THREE.PlaneGeometry(half * 2, half * 2, n, n);
+      geo.rotateX(-Math.PI / 2); geo.translate(cx, 0, cz);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) pos.setY(i, Math.max(groundAt(pos.getX(i), pos.getZ(i)), WATER_Y) + 0.035);
+      if (grid) { grid.geometry.dispose(); grid.geometry = geo; }
+      else { grid = new THREE.Mesh(geo, gridMat); grid.renderOrder = 3; grid.frustumCulled = false; scene.add(grid); }
+      gridU.uC.value.set(cx, cz);
+      gridU.uR.value.set(Math.max(d.w, d.h) / 2 + 0.8, Math.max(d.w, d.h) / 2 + GRID_R);
+    }
+    gridU.uW.value = Math.max(1.2, pixelRatio * 1.1);
+    gridU.uCol.value.set(bad ? '#ffcfc4' : '#fff6e0');
   }
 
   // ---------- people (instanced) ----------

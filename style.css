@@ -34,7 +34,9 @@ canvas#map3d { position: fixed; inset: 0; width: 100%; height: 100%; display: no
 .up { color: var(--green); } .down { color: var(--red); } .flat { color: #8a7c66; }
 @keyframes pulse { 50% { background: #fde3dc; } }
 #clock { display: flex; flex-direction: column; gap: 4px; align-items: stretch; pointer-events: auto; min-width: 92px; }
-#season { background: rgba(246,239,225,.94); border: 1px solid var(--line); border-radius: 10px; padding: 3px 6px; text-align: center; font-weight: 700; font-size: 13px; min-height: 30px; display: flex; align-items: center; justify-content: center; }
+#season { background: rgba(246,239,225,.94); border: 1px solid var(--line); border-radius: 10px; padding: 3px 6px; text-align: center; font-weight: 700; font-size: 13px; min-height: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+#season b { font-size: 13px; }
+#season small { font-size: 10.5px; font-weight: 600; opacity: .75; }
 #speed { background: var(--ink); color: var(--paper); border: 0; border-radius: 10px; min-height: 30px; font-weight: 700; }
 #warn { margin-top: 4px; display: flex; flex-direction: column; gap: 3px; pointer-events: auto; }
 #warn div { background: rgba(255,244,222,.96); border-left: 4px solid var(--amber); border-radius: 6px; padding: 3px 8px; font-size: 13px; font-weight: 600; }

@@ -590,6 +590,22 @@ function clampCamera() {
   camera.y = hh * 2 >= H ? H / 2 : Math.max(hh - 3, Math.min(H - hh + 3, camera.y));
 }
 
+// placement grid for the top view: tile lines around the ghost, fading out in a circle
+function drawPlaceGrid() {
+  const d = DEFS[placing.type], z = camera.zoom, big = Math.max(d.w, d.h) / 2;
+  const cx = placing.x + d.w / 2, cy = placing.y + d.h / 2, r0 = big + 0.8, r1 = big + 4.5;
+  const [sx, sy] = toScreen(cx, cy);
+  const bad = !!canPlace(placing.type, placing.x, placing.y), col = bad ? '255,207,196' : '255,246,224';
+  const grad = ctx.createRadialGradient(sx, sy, r0 * z, sx, sy, r1 * z);
+  grad.addColorStop(0, `rgba(${col},.95)`); grad.addColorStop(1, `rgba(${col},0)`);
+  const x0 = Math.max(0, Math.floor(cx - r1)), x1 = Math.min(W, Math.ceil(cx + r1));
+  const y0 = Math.max(0, Math.floor(cy - r1)), y1 = Math.min(H, Math.ceil(cy + r1));
+  ctx.beginPath();
+  for (let x = x0; x <= x1; x++) { const [a, b] = toScreen(x, y0), [, c] = toScreen(x, y1); ctx.moveTo(Math.round(a) + 0.5, b); ctx.lineTo(Math.round(a) + 0.5, c); }
+  for (let y = y0; y <= y1; y++) { const [a, b] = toScreen(x0, y), [c] = toScreen(x1, y); ctx.moveTo(a, Math.round(b) + 0.5); ctx.lineTo(c, Math.round(b) + 0.5); }
+  ctx.strokeStyle = grad; ctx.lineWidth = 1.5; ctx.stroke();
+}
+
 function render() {
   if (V3) V3.setVisible(!!S && use3D);
   if (!S) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#2F8C9A'; ctx.fillRect(0, 0, cv.width, cv.height); return; }
@@ -607,6 +623,7 @@ function render() {
   ctx.imageSmoothingEnabled = z < TS;
   ctx.drawImage(terrainCanvas, ox, oy, W * z, H * z);
 
+  if (placing) drawPlaceGrid();
   // buildings
   for (const b of S.buildings) drawBuilding(b, b === selected ? 'sel' : null);
   // ghost while placing
@@ -846,7 +863,7 @@ function updateHUD() {
     html += `<div class="chip ${cls}" data-r="${r}"><i>${ICON[r]}</i>${Math.floor(v)}${trend}</div>`;
   }
   $('stocks').innerHTML = html;
-  $('season').textContent = `${t('seasons')[se]} · ${t('year')}${S.year}`;
+  $('season').innerHTML = `<b>${t('months')[S.month]}</b><small>${t('seasons')[se]} · ${t('year')}${S.year}</small>`;
 
   // warnings
   const warns = [];
